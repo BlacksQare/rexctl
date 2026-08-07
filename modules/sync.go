@@ -115,12 +115,14 @@ func CmdSync(args []string) {
 
 				if _, err := os.Stat(contDir); err != nil {
 					logging.LogInfo("Cloning '%s'...", c.Name)
-					runCmdStream(stackDir, "git", "clone", c.Remote, c.Name)
+					runCmdStream(stackDir, "git", "clone", "--recurse-submodules", c.Remote, c.Name)
 					runCmd(contDir, "git", "checkout", c.Revision)
+					runCmd(contDir, "git", "submodule", "update", "--init", "--recursive")
 				} else {
 					logging.LogInfo("Fetching and checking out '%s'...", c.Name)
 					runCmd(contDir, "git", "fetch")
 					runCmd(contDir, "git", "checkout", c.Revision)
+					runCmd(contDir, "git", "submodule", "update", "--init", "--recursive")
 				}
 
 				composeDir := filepath.Dir(filepath.Join(contDir, c.ComposeFile))
