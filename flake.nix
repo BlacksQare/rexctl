@@ -15,7 +15,9 @@
             version = "0.1.0";
             src = ./.;
             
-            vendorHash = "sha256-Vh5g4S3LN0Cw6NixYCFqImFZqg6DUowI9UmGPWYE5nM="; 
+            vendorHash = "sha256-AG7fBxxJVIl2UO9cKxWa63iGMKnRk5CXl3nsC56CppY=";
+
+            nativeCheckInputs = [ pkgs.git ];
           };
         });
 
@@ -32,6 +34,7 @@
             ldflags = [ 
               "-X rexctl/config.WorkspacesDir=${cfg.workspacesPath}"
               "-X rexctl/config.DefaultManifestPath=${manifestFile}" 
+              "-X rexctl/config.DefaultShellUser=${cfg.defaultShellUser}"
             ];
           });
         in {
@@ -44,6 +47,12 @@
               description = "The path to the workspaces directory baked into the binary.";
             };
 
+            defaultShellUser = mkOption {
+              type = types.str;
+              default = "root";
+              description = "The default user to use when connecting via rexctl shell / rexctl sh.";
+            };
+
             defaultManifest = mkOption {
               type = types.str;
               default = ''
@@ -52,11 +61,11 @@
 
                 spec:
                   containers:
-                    - name: raptor_ws
+                    - name: example_voting_app
                       type: compose
-                      remote: https://github.com/wisniax/raptor_ws
-                      revision: master
-                      composeFile: docker-compose.yml
+                      remote: https://github.com/dockersamples/example-voting-app
+                      revision: main
+
 
                     - name: nginx
                       type: image

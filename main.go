@@ -7,8 +7,7 @@ import (
 	"rexctl/modules"
 )
 
-func main() {
-	args := os.Args[1:]
+func Run(args []string) {
 	if len(args) == 0 {
 		modules.CmdHelp()
 		return
@@ -28,28 +27,46 @@ func main() {
 		modules.CmdGet()
 	case "status":
 		modules.CmdStatus()
+	case "up":
+		modules.CmdUp(cmdArgs)
 	case "start":
 		modules.CmdStart(cmdArgs)
-	case "down", "stop":
+	case "stop":
+		modules.CmdStop(cmdArgs)
+	case "down":
 		modules.CmdDown(cmdArgs)
+
+	case "prepare-env":
+		modules.CmdPrepareEnv(cmdArgs)
+	case "shell", "sh":
+		modules.CmdShell(cmdArgs)
 	case "switch":
-		modules.CmdDown(nil)
-		modules.CmdStart(cmdArgs)
+		modules.CmdSwitch(cmdArgs)
+
 	case "destroy":
 		modules.CmdDestroy(cmdArgs)
 	case "sync":
 		modules.CmdSync(cmdArgs)
 	case "validate":
-		cwd, _ := os.Getwd()
-		modules.ValidateStack(cwd)
+		arg := ""
+		if len(cmdArgs) > 0 {
+			arg = cmdArgs[0]
+		}
+		_, stackDir := modules.ResolveWorkspaceOrDie(arg)
+		modules.ValidateStack(stackDir)
 		logging.LogInfo("Stack configuration is valid.")
 	case "edit":
 		modules.CmdEdit(cmdArgs)
 	case "info":
-		modules.CmdInfo()
+		modules.CmdInfo(cmdArgs)
 	case "help":
 		modules.CmdHelp()
 	default:
 		modules.CmdHelp()
 	}
 }
+
+func main() {
+	Run(os.Args[1:])
+}
+

@@ -1,7 +1,6 @@
 package modules
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,73 +8,62 @@ import (
 	"rexctl/config"
 	"rexctl/logging"
 	"strings"
-
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
 )
 
-type WorkspaceManifest struct {
-	Kind string        `yaml:"kind"`
-	Spec WorkspaceSpec `yaml:"spec"`
-}
-
-type WorkspaceSpec struct {
-	Repositories []Repository `yaml:"repositories"`
-}
-
-type Repository struct {
-	Name     string `yaml:"name"`
-	Type     string `yaml:"type"`
-	Remote   string `yaml:"remote"`
-	Revision string `yaml:"revision,omitempty"`
+// CreateWorkspace creates a workspace folder and writes its rex.yaml manifest.
+func CreateWorkspace(name string, manifest []byte) error {
+	dir := filepath.Join(config.WorkspacesDir, name)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dir, "rex.yaml"), manifest, 0644)
 }
 
 func CmdCreate(args []string) {
 	if len(args) < 1 {
 		Die("Usage: rexctl create <stack>")
 	}
+	name := args[0]
+	dir := filepath.Join(config.WorkspacesDir, name)
 
-	stackName := args[0]
-	stackDir := filepath.Join(config.WorkspacesDir, stackName)
-	var manifestData []byte
+	if _, err := os.Stat(dir); err == nil {
+		Die("Directory '%s' already exists for workspace '%s'.", dir, name)
+	}
 
+	var manifestContent []byte
 	if config.DefaultManifestPath != "" {
 		data, err := os.ReadFile(config.DefaultManifestPath)
 		if err == nil {
-			manifestData = data
-		} else {
-			Die("Failed to read default manifest from Nix store: %v", err)
+			manifestContent = data
 		}
-	} else {
-		manifestData = []byte(config.DefaultManifestFallback)
+	}
+	if len(manifestContent) == 0 {
+		manifestContent = []byte(config.DefaultManifestFallback)
 	}
 
-	if err := os.MkdirAll(stackDir, 0755); err != nil {
-		Die("Failed to create workspace directory: %v", err)
+	if err := CreateWorkspace(name, manifestContent); err != nil {
+		Die("Failed to create workspace directory or manifest: %v", err)
 	}
 
-	targetFile := filepath.Join(stackDir, "rex.yaml")
-	if err := os.WriteFile(targetFile, manifestData, 0644); err != nil {
-		Die("Failed to create rex.yaml: %v", err)
-	}
-
-	logging.LogInfo("Workspace '%s' initialized.", stackName)
+	logging.LogInfo("Workspace '%s' created at %s", name, dir)
 }
 
 func CmdPwd(args []string) {
-	if len(args) < 1 {
-		Die("Usage: rexctl pwd <stack>")
+	arg := ""
+	if len(args) > 0 {
+		arg = args[0]
 	}
-	fmt.Println(filepath.Join(config.WorkspacesDir, args[0]))
+	_, stackDir := ResolveWorkspaceOrDie(arg)
+	fmt.Println(stackDir)
 }
+
 
 func CmdGet() {
 	active, found := getActiveStack()
-	if found && active != "" {
-		fmt.Println(active)
-	} else {
-		fmt.Println("No workspace is currently running.")
+	if !found || active == "" {
+		return
 	}
+	fmt.Println(active)
 }
 
 func CmdStatus() {
@@ -85,67 +73,42 @@ func CmdStatus() {
 		return
 	}
 
-	cli := getDockerClient()
-	f := filters.NewArgs()
-	f.Add("label", "com.docker.compose.project="+active)
-	containers, _ := cli.ContainerList(context.Background(), container.ListOptions{All: true, Filters: f})
+	outAll, _ := exec.Command("docker", "ps", "-a", "-q", "--filter", fmt.Sprintf("label=com.docker.compose.project=%s", active)).Output()
+	allCount := len(strings.Fields(string(outAll)))
 
-	running := 0
-	for _, c := range containers {
-		if c.State == "running" {
-			running++
-		}
-	}
+	outRunning, _ := exec.Command("docker", "ps", "-q", "--filter", fmt.Sprintf("label=com.docker.compose.project=%s", active)).Output()
+	runningCount := len(strings.Fields(string(outRunning)))
 
-	fmt.Printf("%d out of %d containers running from stack %s\n", running, len(containers), active)
+	fmt.Printf("%d out of %d containers running from stack %s\n", runningCount, allCount, active)
 }
 
-func CmdDown(args []string) {
-	var target string
-
+// CmdStop gracefully stops running containers without removing them (similar to docker compose stop).
+func CmdStop(args []string) {
+	arg := ""
 	if len(args) > 0 {
-		target = args[0]
-	} else {
-		active, found := getActiveStack()
-		if !found {
-			Die("No active stack running to bring down.")
-		}
-		target = active
+		arg = args[0]
 	}
+	target, stackDir := ResolveWorkspaceOrDie(arg)
 
 	logging.LogInfo("Stopping stack '%s'...", target)
-	stackDir := filepath.Join(config.WorkspacesDir, target)
 
 	if _, err := os.Stat(filepath.Join(stackDir, "rex.yaml")); err == nil {
 		m := parseManifest(stackDir)
 		for _, c := range m.Spec.Containers {
 			if c.Type == "compose" {
-				relComposeFile := filepath.Join(c.Name, c.ComposeFile)
-				absComposeFile := filepath.Join(stackDir, relComposeFile)
-
-				if _, err := os.Stat(absComposeFile); err == nil {
-					relOverrideFile := createComposeOverride(stackDir, relComposeFile, target)
-
-					composeArgs := []string{"compose", "--project-name", target, "-f", relComposeFile}
-					if relOverrideFile != "" {
-						composeArgs = append(composeArgs, "-f", relOverrideFile)
-					}
-					composeArgs = append(composeArgs, "stop")
-
-					cmd := exec.Command("docker", composeArgs...)
-					cmd.Dir = stackDir
+				contDir := filepath.Join(stackDir, c.Name)
+				if _, err := os.Stat(contDir); err == nil {
+					cmd := exec.Command("docker", "compose", "--project-name", target, "stop")
+					cmd.Dir = contDir
 					cmd.Stdout = os.Stdout
 					cmd.Stderr = os.Stderr
 					cmd.Run()
-
-					if relOverrideFile != "" {
-						os.Remove(filepath.Join(stackDir, relOverrideFile))
-					}
 				}
 			}
 		}
 	}
 
+	// Stop any raw image containers or matching containers
 	out, err := exec.Command("docker", "ps", "-q", "--filter", fmt.Sprintf("label=com.docker.compose.project=%s", target)).Output()
 	if err == nil {
 		containerIDs := strings.Fields(string(out))
@@ -161,30 +124,79 @@ func CmdDown(args []string) {
 	logging.LogInfo("Stack '%s' stopped.", target)
 }
 
+// CmdDown stops and removes containers, networks, and internal volumes (similar to docker compose down).
+func CmdDown(args []string) {
+	arg := ""
+	if len(args) > 0 {
+		arg = args[0]
+	}
+	target, stackDir := ResolveWorkspaceOrDie(arg)
+
+	logging.LogInfo("Tearing down stack '%s'...", target)
+
+	if _, err := os.Stat(filepath.Join(stackDir, "rex.yaml")); err == nil {
+		m := parseManifest(stackDir)
+		for _, c := range m.Spec.Containers {
+			if c.Type == "compose" {
+				contDir := filepath.Join(stackDir, c.Name)
+				if _, err := os.Stat(contDir); err == nil {
+					cmd := exec.Command("docker", "compose", "--project-name", target, "down")
+					cmd.Dir = contDir
+					cmd.Stdout = os.Stdout
+					cmd.Stderr = os.Stderr
+					cmd.Run()
+				}
+			} else if c.Type == "image" {
+				containerName := fmt.Sprintf("%s-%s", c.Name, target)
+				exec.Command("docker", "stop", containerName).Run()
+				exec.Command("docker", "rm", containerName).Run()
+			}
+		}
+	}
+
+	// Stop and remove any remaining containers for this workspace
+	out, err := exec.Command("docker", "ps", "-a", "-q", "--filter", fmt.Sprintf("label=com.docker.compose.project=%s", target)).Output()
+	if err == nil {
+		containerIDs := strings.Fields(string(out))
+		if len(containerIDs) > 0 {
+			stopArgs := append([]string{"stop"}, containerIDs...)
+			exec.Command("docker", stopArgs...).Run()
+			rmArgs := append([]string{"rm", "-f"}, containerIDs...)
+			rmCmd := exec.Command("docker", rmArgs...)
+			rmCmd.Stdout = os.Stdout
+			rmCmd.Stderr = os.Stderr
+			rmCmd.Run()
+		}
+	}
+
+	logging.LogInfo("Stack '%s' brought down.", target)
+}
+
 func CmdSwitch(args []string) {
 	if len(args) < 1 {
 		Die("Usage: rexctl switch <stack>")
 	}
-	target := args[0]
-	ValidateStack(filepath.Join(config.WorkspacesDir, target))
+	target, stackDir := ResolveWorkspaceOrDie(args[0])
+	ValidateStack(stackDir)
 
 	if active, found := getActiveStack(); found {
 		if active == target {
 			logging.LogInfo("Stack '%s' is already running.", target)
 			return
 		}
-		CmdDown([]string{active})
+		logging.LogInfo("Stopping active workspace '%s' (preserving container states)...", active)
+		CmdStop([]string{active})
 	}
 
-	CmdStart([]string{target})
+	logging.LogInfo("Switching to workspace '%s'...", target)
+	CmdUp([]string{target})
 }
 
 func CmdDestroy(args []string) {
 	if len(args) < 1 {
 		Die("Usage: rexctl destroy <stack>")
 	}
-	target := args[0]
-	stackDir := filepath.Join(config.WorkspacesDir, target)
+	target, stackDir := ResolveWorkspaceOrDie(args[0])
 
 	if _, err := os.Stat(stackDir); os.IsNotExist(err) {
 		Die("Stack '%s' does not exist.", target)
@@ -200,13 +212,12 @@ func CmdDestroy(args []string) {
 		return
 	}
 
-	if active, found := getActiveStack(); found && active == target {
-		CmdDown([]string{target})
-	}
+	// Always ensure containers/volumes are brought down before removing files
+	CmdDown([]string{target})
 
 	logging.LogInfo("Destroying stack '%s'...", target)
 
-	if err := forceRemoveDir(stackDir); err != nil {
+	if err := os.RemoveAll(stackDir); err != nil {
 		Die("Failed to remove stack directory: %v", err)
 	}
 
@@ -218,8 +229,7 @@ func CmdEdit(args []string) {
 	if len(args) > 0 {
 		arg = args[0]
 	}
-	stackName := getTargetStack(arg)
-	stackDir := filepath.Join(config.WorkspacesDir, stackName)
+	stackName, stackDir := ResolveWorkspaceOrDie(arg)
 	targetFile := filepath.Join(stackDir, "rex.yaml")
 
 	if _, err := os.Stat(targetFile); err != nil {
@@ -231,7 +241,11 @@ func CmdEdit(args []string) {
 		editor = "vim"
 	}
 
-	cmd := exec.Command(editor, targetFile)
+	editorParts := strings.Fields(editor)
+	cmdName := editorParts[0]
+	cmdArgs := append(editorParts[1:], targetFile)
+
+	cmd := exec.Command(cmdName, cmdArgs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -256,7 +270,8 @@ func CmdEdit(args []string) {
 	}
 }
 
-func Die(format string, a ...any) {
+var Die = func(format string, a ...any) {
 	logging.LogErr(format, a...)
 	os.Exit(1)
 }
+
