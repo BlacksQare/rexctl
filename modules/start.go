@@ -35,6 +35,10 @@ func CmdUp(args []string) {
 				Die("Container '%s' is missing files. Run 'rexctl sync %s' first.", c.Name, target)
 			}
 
+			if err := PrepareComposePrebuiltImages(contDir, target, false); err != nil {
+				Die("Failed to prepare pre-built images for '%s': %v", c.Name, err)
+			}
+
 			// Refresh standard override with latest commit and dirty state before bringing up
 			rev, _ := GetGitCommitHash(contDir)
 			dirty, _ := IsGitDirty(contDir)

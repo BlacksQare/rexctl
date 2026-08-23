@@ -15,6 +15,7 @@ func TestCmdHelp_ContainsAllCommands(t *testing.T) {
 		"edit",
 		"sync",
 		"prepare-env",
+		"build",
 		"up",
 		"start",
 		"stop",

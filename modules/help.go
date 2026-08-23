@@ -13,6 +13,7 @@ Commands:
   edit         [workspace]           Open the workspace manifest in your default $EDITOR
   sync         [workspace]           Clone/pull repositories and prepare container states
   prepare-env  [workspace]           Execute environment init scripts across all repositories
+  build        [workspace]           Build container images without starting them (docker compose build)
   up           <workspace>           Create and start the workspace containers (docker compose up -d)
   start        <workspace>           Start existing stopped workspace containers (docker compose start)
   stop         [workspace]           Stop running workspace containers without removing them (docker compose stop)

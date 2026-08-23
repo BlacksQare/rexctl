@@ -3,7 +3,9 @@ package modules
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"rexctl/logging"
 	"sort"
 
 	"gopkg.in/yaml.v3"
@@ -11,30 +13,37 @@ import (
 
 // StandardOverride represents the standard docker-compose.override.yml structure.
 type StandardOverride struct {
+	Name     string                             `yaml:"name,omitempty"`
 	Services map[string]StandardOverrideService `yaml:"services"`
 }
 
 // StandardOverrideService represents per-service overrides applied by Docker Compose.
 type StandardOverrideService struct {
-	Image  string            `yaml:"image,omitempty"`
-	Labels map[string]string `yaml:"labels,omitempty"`
+	ContainerName string            `yaml:"container_name,omitempty"`
+	Image         string            `yaml:"image,omitempty"`
+	Labels        map[string]string `yaml:"labels,omitempty"`
 }
 
 // ServiceBuildInfo describes whether a service in a compose file has a build context.
 type ServiceBuildInfo struct {
 	Name     string
 	HasBuild bool
+	Image    string
 }
 
 // GenerateStandardOverride generates standard docker-compose.override.yml content.
-// Only services with a local build context get their image name overridden.
+// Services with a local build context get workspace/commit tags.
+// Pre-built services get workspace/service:latest tags.
+// All services get a unique workspace-prefixed container_name to prevent Docker container name collisions.
 func GenerateStandardOverride(workspace string, services []ServiceBuildInfo, commitHash string, isDirty bool) (string, error) {
 	override := StandardOverride{
+		Name:     workspace,
 		Services: make(map[string]StandardOverrideService),
 	}
 
 	for _, svc := range services {
 		svcOverride := StandardOverrideService{
+			ContainerName: fmt.Sprintf("%s-%s", workspace, svc.Name),
 			Labels: map[string]string{
 				"rexctl.workspace": workspace,
 				"rexctl.service":   svc.Name,
@@ -45,6 +54,8 @@ func GenerateStandardOverride(workspace string, services []ServiceBuildInfo, com
 
 		if svc.HasBuild {
 			svcOverride.Image = BuildImageTag(workspace, svc.Name, commitHash, isDirty)
+		} else {
+			svcOverride.Image = fmt.Sprintf("rexctl/%s/%s:latest", workspace, svc.Name)
 		}
 
 		override.Services[svc.Name] = svcOverride
@@ -67,7 +78,8 @@ func DetectComposeServicesInfo(repoDir string) []ServiceBuildInfo {
 		if err == nil {
 			var raw struct {
 				Services map[string]struct {
-					Build any `yaml:"build"`
+					Build any    `yaml:"build"`
+					Image string `yaml:"image"`
 				} `yaml:"services"`
 			}
 			if err := yaml.Unmarshal(data, &raw); err == nil && len(raw.Services) > 0 {
@@ -76,12 +88,41 @@ func DetectComposeServicesInfo(repoDir string) []ServiceBuildInfo {
 					result = append(result, ServiceBuildInfo{
 						Name:     name,
 						HasBuild: svc.Build != nil,
+						Image:    svc.Image,
 					})
 				}
 				sort.Slice(result, func(i, j int) bool {
 					return result[i].Name < result[j].Name
 				})
 				return result
+			}
+		}
+	}
+	return nil
+}
+
+// PrepareComposePrebuiltImages ensures that pre-built (non-buildable) images referenced in docker-compose.yml
+// are pulled and retagged under rexctl/<workspace>/<service>:latest.
+func PrepareComposePrebuiltImages(repoDir string, workspace string, forcePull bool) error {
+	services := DetectComposeServicesInfo(repoDir)
+	for _, svc := range services {
+		if !svc.HasBuild && svc.Image != "" {
+			targetTag := fmt.Sprintf("rexctl/%s/%s:latest", workspace, svc.Name)
+			shouldPull := forcePull
+			if !shouldPull {
+				if err := exec.Command("docker", "image", "inspect", targetTag).Run(); err != nil {
+					shouldPull = true
+				}
+			}
+
+			if shouldPull {
+				logging.LogInfo("Pulling and retagging pre-built image '%s' for service '%s'...", svc.Image, svc.Name)
+				if _, err := runCmd(repoDir, "docker", "pull", svc.Image); err != nil {
+					return fmt.Errorf("failed to pull image '%s' for service '%s': %w", svc.Image, svc.Name, err)
+				}
+				if _, err := runCmd(repoDir, "docker", "tag", svc.Image, targetTag); err != nil {
+					return fmt.Errorf("failed to tag image '%s' as '%s': %w", svc.Image, targetTag, err)
+				}
 			}
 		}
 	}
@@ -106,3 +147,4 @@ func WriteStandardOverride(repoDir string, workspace string, defaultServiceName 
 	overridePath := filepath.Join(repoDir, "docker-compose.override.yml")
 	return os.WriteFile(overridePath, []byte(content), 0644)
 }
+

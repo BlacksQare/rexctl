@@ -74,6 +74,7 @@ func TestRun_CommandDispatching(t *testing.T) {
 		{"prepare-env", []string{"prepare-env", "nonexistent-ws"}},
 		{"shell", []string{"shell"}},
 		{"sh", []string{"sh"}},
+		{"build", []string{"build"}},
 		{"up", []string{"up"}},
 		{"start", []string{"start"}},
 		{"switch", []string{"switch"}},

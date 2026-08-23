@@ -109,7 +109,8 @@ func ResolveRunningContainer(stackName, containerName string) string {
 					if n == containerName ||
 						n == fmt.Sprintf("%s-%s-1", stackName, containerName) ||
 						n == fmt.Sprintf("%s_%s_1", stackName, containerName) ||
-						n == fmt.Sprintf("%s-%s", containerName, stackName) {
+						n == fmt.Sprintf("%s-%s", containerName, stackName) ||
+						n == fmt.Sprintf("%s-%s", stackName, containerName) {
 						return n
 					}
 				}

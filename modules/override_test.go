@@ -27,9 +27,17 @@ func TestGenerateStandardOverride_BuildableService(t *testing.T) {
 		t.Fatalf("failed to unmarshal generated override: %v", err)
 	}
 
+	if parsed.Name != "my-workspace" {
+		t.Errorf("expected name 'my-workspace', got '%s'", parsed.Name)
+	}
+
 	webSvc, ok := parsed.Services["web"]
 	if !ok {
 		t.Fatal("expected 'web' service in override")
+	}
+
+	if webSvc.ContainerName != "my-workspace-web" {
+		t.Errorf("expected container_name 'my-workspace-web', got '%s'", webSvc.ContainerName)
 	}
 
 	expectedImage := "rexctl/my-workspace/web:abc1234"
@@ -51,7 +59,7 @@ func TestGenerateStandardOverride_BuildableService(t *testing.T) {
 func TestGenerateStandardOverride_NonBuildableService(t *testing.T) {
 	// A 3rd party registry image (e.g. mosquitto/redis) without a local build context
 	services := []ServiceBuildInfo{
-		{Name: "mosquitto", HasBuild: false},
+		{Name: "mosquitto", HasBuild: false, Image: "eclipse-mosquitto:latest"},
 	}
 	content, err := GenerateStandardOverride("test1", services, "ed77c51", false)
 	if err != nil {
@@ -63,14 +71,22 @@ func TestGenerateStandardOverride_NonBuildableService(t *testing.T) {
 		t.Fatalf("failed to unmarshal override: %v", err)
 	}
 
+	if parsed.Name != "test1" {
+		t.Errorf("expected name 'test1', got '%s'", parsed.Name)
+	}
+
 	mosq, ok := parsed.Services["mosquitto"]
 	if !ok {
 		t.Fatal("expected 'mosquitto' service in override")
 	}
 
-	// Image MUST NOT be overwritten for pre-built registry images
-	if mosq.Image != "" {
-		t.Errorf("expected empty Image override for non-buildable service, got '%s'", mosq.Image)
+	if mosq.ContainerName != "test1-mosquitto" {
+		t.Errorf("expected container_name 'test1-mosquitto', got '%s'", mosq.ContainerName)
+	}
+
+	expectedMosqImage := "rexctl/test1/mosquitto:latest"
+	if mosq.Image != expectedMosqImage {
+		t.Errorf("expected image override '%s' for non-buildable service, got '%s'", expectedMosqImage, mosq.Image)
 	}
 
 	if mosq.Labels["rexctl.workspace"] != "test1" {
@@ -81,7 +97,7 @@ func TestGenerateStandardOverride_NonBuildableService(t *testing.T) {
 func TestGenerateStandardOverride_MixedServices(t *testing.T) {
 	services := []ServiceBuildInfo{
 		{Name: "ros-core", HasBuild: true},
-		{Name: "mosquitto", HasBuild: false},
+		{Name: "mosquitto", HasBuild: false, Image: "eclipse-mosquitto:latest"},
 	}
 	content, err := GenerateStandardOverride("robot-ws", services, "9f8e7d6", true)
 	if err != nil {
@@ -93,15 +109,26 @@ func TestGenerateStandardOverride_MixedServices(t *testing.T) {
 		t.Fatalf("failed to unmarshal override: %v", err)
 	}
 
+	if parsed.Name != "robot-ws" {
+		t.Errorf("expected name 'robot-ws', got '%s'", parsed.Name)
+	}
+
 	ros := parsed.Services["ros-core"]
+	if ros.ContainerName != "robot-ws-ros-core" {
+		t.Errorf("expected container_name 'robot-ws-ros-core', got '%s'", ros.ContainerName)
+	}
 	expectedRosImage := "rexctl/robot-ws/ros-core:9f8e7d6-dirty"
 	if ros.Image != expectedRosImage {
 		t.Errorf("expected ros-core image '%s', got '%s'", expectedRosImage, ros.Image)
 	}
 
 	mosq := parsed.Services["mosquitto"]
-	if mosq.Image != "" {
-		t.Errorf("expected no image override for mosquitto, got '%s'", mosq.Image)
+	if mosq.ContainerName != "robot-ws-mosquitto" {
+		t.Errorf("expected container_name 'robot-ws-mosquitto', got '%s'", mosq.ContainerName)
+	}
+	expectedMosqImage := "rexctl/robot-ws/mosquitto:latest"
+	if mosq.Image != expectedMosqImage {
+		t.Errorf("expected image '%s' for mosquitto, got '%s'", expectedMosqImage, mosq.Image)
 	}
 	if mosq.Labels["rexctl.dirty"] != "true" {
 		t.Errorf("expected mosquitto dirty label to be 'true'")
@@ -131,8 +158,8 @@ services:
 	if services[0].Name != "app" || !services[0].HasBuild {
 		t.Errorf("expected app with build=true: %+v", services[0])
 	}
-	if services[1].Name != "cache" || services[1].HasBuild {
-		t.Errorf("expected cache with build=false: %+v", services[1])
+	if services[1].Name != "cache" || services[1].HasBuild || services[1].Image != "redis:alpine" {
+		t.Errorf("expected cache with build=false, image=redis:alpine: %+v", services[1])
 	}
 	if services[2].Name != "worker" || !services[2].HasBuild {
 		t.Errorf("expected worker with build=true: %+v", services[2])
@@ -162,6 +189,10 @@ services:
 	var parsed StandardOverride
 	if err := yaml.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("failed to unmarshal written override: %v", err)
+	}
+
+	if parsed.Name != "dev-stack" {
+		t.Errorf("expected name 'dev-stack', got '%s'", parsed.Name)
 	}
 
 	apiSvc, ok := parsed.Services["api"]

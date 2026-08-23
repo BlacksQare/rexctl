@@ -188,8 +188,38 @@ func CmdSwitch(args []string) {
 		CmdStop([]string{active})
 	}
 
-	logging.LogInfo("Switching to workspace '%s'...", target)
-	CmdUp([]string{target})
+	// Check if target workspace has existing containers to resume
+	hasExisting := false
+	m := parseManifest(stackDir)
+	for _, c := range m.Spec.Containers {
+		if c.Type == "compose" {
+			contDir := filepath.Join(stackDir, c.Name)
+			if _, err := os.Stat(contDir); err == nil {
+				psCmd := exec.Command("docker", "compose", "--project-name", target, "ps", "-a", "-q")
+				psCmd.Dir = contDir
+				out, _ := psCmd.Output()
+				if len(strings.TrimSpace(string(out))) > 0 {
+					hasExisting = true
+					break
+				}
+			}
+		} else if c.Type == "image" {
+			containerName := fmt.Sprintf("%s-%s", c.Name, target)
+			inspectCmd := exec.Command("docker", "container", "inspect", containerName)
+			if inspectCmd.Run() == nil {
+				hasExisting = true
+				break
+			}
+		}
+	}
+
+	if hasExisting {
+		logging.LogInfo("Starting existing workspace '%s'...", target)
+		CmdStart([]string{target})
+	} else {
+		logging.LogInfo("Workspace '%s' has no existing containers, bringing it up...", target)
+		CmdUp([]string{target})
+	}
 }
 
 func CmdDestroy(args []string) {

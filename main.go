@@ -27,6 +27,8 @@ func Run(args []string) {
 		modules.CmdGet()
 	case "status":
 		modules.CmdStatus()
+	case "build":
+		modules.CmdBuild(cmdArgs)
 	case "up":
 		modules.CmdUp(cmdArgs)
 	case "start":

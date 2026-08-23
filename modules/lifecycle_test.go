@@ -145,9 +145,17 @@ spec:
 		t.Fatalf("failed to parse standard override: %v", err)
 	}
 
+	if parsed.Name != stackName {
+		t.Errorf("expected name '%s', got '%s'", stackName, parsed.Name)
+	}
+
 	visionSvc, ok := parsed.Services["vision"]
 	if !ok {
 		t.Fatal("expected 'vision' service in standard override")
+	}
+
+	if visionSvc.ContainerName != stackName+"-vision" {
+		t.Errorf("expected container_name '%s-vision', got '%s'", stackName, visionSvc.ContainerName)
 	}
 
 	expectedImage := "rexctl/" + stackName + "/vision:" + commit
@@ -325,6 +333,27 @@ func TestCmdList_Output(t *testing.T) {
 	})
 	if !strings.Contains(out, "list-ws") {
 		t.Errorf("expected CmdList to include 'list-ws', got '%s'", out)
+	}
+}
+
+func TestCmdSwitch_Validation(t *testing.T) {
+	origDie := Die
+	died := false
+	Die = func(format string, a ...any) {
+		died = true
+		panic("died")
+	}
+	defer func() {
+		Die = origDie
+	}()
+
+	// No args -> Die
+	func() {
+		defer func() { recover() }()
+		CmdSwitch([]string{})
+	}()
+	if !died {
+		t.Error("expected Die when no args passed to CmdSwitch")
 	}
 }
 

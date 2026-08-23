@@ -98,11 +98,12 @@ spec:
 | `edit` | `rexctl edit [workspace]` | Open `rex.yaml` in `$EDITOR` |
 | `sync` | `rexctl sync [workspace]` | Fetch/clone repositories, checkout revisions, pull images, and generate overrides |
 | `prepare-env` | `rexctl prepare-env [workspace]` | Run `rexctl_init.sh` across all cloned repositories |
+| `build` | `rexctl build [workspace]` | Build container images without starting them (`docker compose build`) |
 | `up` | `rexctl up <workspace>` | Build and start containers (`docker compose up -d --build`) |
 | `start` | `rexctl start <workspace>` | Start existing stopped containers (`docker compose start`) |
 | `stop` | `rexctl stop [workspace]` | Gracefully stop running containers without removing them |
 | `down` | `rexctl down [workspace]` | Stop and remove containers and networks (`docker compose down`) |
-| `switch` | `rexctl switch <workspace>` | Stop current workspace and bring up the target workspace |
+| `switch` | `rexctl switch <workspace>` | Stop current workspace and start the target workspace (without rebuilding) |
 | `destroy` | `rexctl destroy <workspace>` | Remove containers and delete the workspace directory |
 | `shell` / `sh` | `rexctl sh [-u user] [workspace] <container>` | Open an interactive shell in a container |
 | `get` | `rexctl get` | Print the active workspace name (or empty if inactive) |
@@ -116,7 +117,8 @@ If `[workspace]` is omitted on commands that support it, `rexctl` infers the wor
 
 ## Lifecycle Concepts
 
-### `up` vs `start`
+### `build` vs `up` vs `start`
+- `rexctl build [workspace]`: Builds images (`docker compose build`) and refreshes `docker-compose.override.yml` without starting containers.
 - `rexctl up <workspace>`: Builds images, creates container instances, and starts them (`docker compose up -d --build`). Refreshes `docker-compose.override.yml` with the latest commit hash and dirty status before starting.
 - `rexctl start <workspace>`: Resumes existing, stopped containers (`docker compose start`) without rebuilding.
 
@@ -125,7 +127,7 @@ If `[workspace]` is omitted on commands that support it, `rexctl` infers the wor
 - `rexctl down [workspace]`: Stops and removes containers and networks (`docker compose down`).
 
 ### Compose Overrides
-During `sync` and `up`, `rexctl` inspects compose files and generates a `docker-compose.override.yml` in each repository:
+During `sync`, `build`, and `up`, `rexctl` inspects compose files and generates a `docker-compose.override.yml` in each repository:
 - Buildable services are tagged with `rexctl/<workspace>/<service>:<commit>[-dirty]`.
 - Pre-built services retain their image names while attaching metadata labels (`rexctl.workspace`, `rexctl.service`, `rexctl.commit`, `rexctl.dirty`).
 

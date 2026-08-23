@@ -108,6 +108,10 @@ func CmdSync(args []string) {
 					runCmd(contDir, "git", "submodule", "update", "--init", "--recursive")
 				}
 
+				if err := PrepareComposePrebuiltImages(contDir, stackName, true); err != nil {
+					logging.LogWarn("Failed to prepare pre-built images for '%s': %v", c.Name, err)
+				}
+
 				rev, _ := GetGitCommitHash(contDir)
 				dirty, _ := IsGitDirty(contDir)
 				if err := WriteStandardOverride(contDir, stackName, c.Name, rev, dirty); err != nil {
