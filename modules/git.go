@@ -2,6 +2,7 @@ package modules
 
 import (
 	"fmt"
+	"rexctl/config"
 	"strings"
 )
 
@@ -15,7 +16,7 @@ func GetGitCommitHash(repoDir string) (string, error) {
 }
 
 // IsGitDirty returns true if the git working tree has staged, unstaged, or untracked changes
-// (ignoring rexctl-generated files like docker-compose.override.yml and .env).
+// (ignoring rexctl-generated files like docker-compose.override.yml, .env, and init script).
 func IsGitDirty(repoDir string) (bool, error) {
 	out, err := runCmd(repoDir, "git", "status", "--porcelain")
 	if err != nil {
@@ -27,7 +28,7 @@ func IsGitDirty(repoDir string) (bool, error) {
 		if trimmed == "" {
 			continue
 		}
-		// Ignore rexctl-generated files (override files, .env)
+		// Ignore rexctl-generated files (override files, .env, init scripts)
 		if isIgnoredGitFile(trimmed) {
 			continue
 		}
@@ -36,7 +37,7 @@ func IsGitDirty(repoDir string) (bool, error) {
 	return false, nil
 }
 
-// isIgnoredGitFile checks whether a git status line corresponds to an ignored rexctl file (.env or docker compose overrides).
+// isIgnoredGitFile checks whether a git status line corresponds to an ignored rexctl file (.env, docker compose overrides, or init script).
 func isIgnoredGitFile(trimmed string) bool {
 	if strings.HasSuffix(trimmed, "docker-compose.override.yml") ||
 		strings.HasSuffix(trimmed, "compose.override.yaml") ||
@@ -45,6 +46,13 @@ func isIgnoredGitFile(trimmed string) bool {
 		strings.HasSuffix(trimmed, "/.env") ||
 		strings.HasSuffix(trimmed, "\t.env") ||
 		trimmed == ".env" {
+		return true
+	}
+	if config.DefaultInitScriptName != "" &&
+		(strings.HasSuffix(trimmed, " "+config.DefaultInitScriptName) ||
+			strings.HasSuffix(trimmed, "/"+config.DefaultInitScriptName) ||
+			strings.HasSuffix(trimmed, "\t"+config.DefaultInitScriptName) ||
+			trimmed == config.DefaultInitScriptName) {
 		return true
 	}
 	return false

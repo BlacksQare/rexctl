@@ -123,6 +123,12 @@ spec:
 	}
 
 	// 3. Write Standard Override and .env (Sync phase)
+	dummyKeyPath := filepath.Join(t.TempDir(), "authorized_keys")
+	os.WriteFile(dummyKeyPath, []byte("dummy-key"), 0600)
+	origKeyPath := config.DefaultAuthorizedKeysPath
+	config.DefaultAuthorizedKeysPath = dummyKeyPath
+	defer func() { config.DefaultAuthorizedKeysPath = origKeyPath }()
+
 	err = WriteEnvFile(visionDir)
 	if err != nil {
 		t.Fatalf("failed to write .env: %v", err)
@@ -147,7 +153,7 @@ spec:
 	if err != nil {
 		t.Fatalf("failed to read .env: %v", err)
 	}
-	if !strings.Contains(string(envData), "REX_CONTAINER_AUTHORIZED_KEYS=~/.ssh/authorized_keys") {
+	if !strings.Contains(string(envData), "REX_CONTAINER_AUTHORIZED_KEYS="+dummyKeyPath) {
 		t.Errorf("expected .env to contain authorized keys, got: %s", string(envData))
 	}
 

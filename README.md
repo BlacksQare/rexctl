@@ -130,7 +130,7 @@ If `[workspace]` is omitted on commands that support it, `rexctl` infers the wor
 During `sync`, `build`, `up`, and `prepare-env`, `rexctl` inspects compose files and generates/updates configuration in each repository:
 - Buildable services are tagged with `rexctl/<workspace>/<service>:<commit>[-dirty]`.
 - Pre-built services retain their image names while attaching metadata labels (`rexctl.workspace`, `rexctl.service`, `rexctl.commit`, `rexctl.dirty`).
-- A `.env` file is generated/updated in each repository containing `REX_CONTAINER_AUTHORIZED_KEYS=~/.ssh/authorized_keys`.
+- A `.env` file is generated/updated in each repository containing `REX_CONTAINER_AUTHORIZED_KEYS=~/.ssh/authorized_keys` (only if the file exists on the host).
 - Both `docker-compose.override.yml` and `.env` are omitted from Git dirty status and image tag calculation.
 
 ## Development

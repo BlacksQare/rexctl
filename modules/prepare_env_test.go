@@ -39,6 +39,12 @@ spec:
 	init2 := filepath.Join(repo2Dir, config.DefaultInitScriptName)
 	os.WriteFile(init2, []byte("#!/bin/bash\necho 'done2' > marker2.txt\n"), 0755)
 
+	dummyKeyPath := filepath.Join(t.TempDir(), "authorized_keys")
+	os.WriteFile(dummyKeyPath, []byte("dummy-key"), 0600)
+	origKeyPath := config.DefaultAuthorizedKeysPath
+	config.DefaultAuthorizedKeysPath = dummyKeyPath
+	defer func() { config.DefaultAuthorizedKeysPath = origKeyPath }()
+
 	err := RunPrepareEnv(stackDir)
 	if err != nil {
 		t.Fatalf("expected prepare-env to succeed, got: %v", err)
@@ -59,7 +65,7 @@ spec:
 		envData, err := os.ReadFile(filepath.Join(dir, ".env"))
 		if err != nil {
 			t.Errorf("expected .env to exist in %s: %v", dir, err)
-		} else if !strings.Contains(string(envData), "REX_CONTAINER_AUTHORIZED_KEYS=~/.ssh/authorized_keys") {
+		} else if !strings.Contains(string(envData), "REX_CONTAINER_AUTHORIZED_KEYS="+dummyKeyPath) {
 			t.Errorf("expected .env in %s to contain REX_CONTAINER_AUTHORIZED_KEYS, got: %s", dir, string(envData))
 		}
 	}

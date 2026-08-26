@@ -3,6 +3,7 @@ package modules
 import (
 	"os"
 	"path/filepath"
+	"rexctl/config"
 	"strings"
 	"testing"
 )
@@ -122,6 +123,12 @@ func TestGitDirtyStatus_IgnoresDotEnvAndOverrides(t *testing.T) {
 		t.Fatalf("failed to get commit hash: %v", err)
 	}
 
+	dummyKeyPath := filepath.Join(t.TempDir(), "authorized_keys")
+	os.WriteFile(dummyKeyPath, []byte("dummy-key"), 0600)
+	origKeyPath := config.DefaultAuthorizedKeysPath
+	config.DefaultAuthorizedKeysPath = dummyKeyPath
+	defer func() { config.DefaultAuthorizedKeysPath = origKeyPath }()
+
 	// 1. Create .env file
 	if err := WriteEnvFile(tempDir); err != nil {
 		t.Fatalf("failed to write .env: %v", err)
@@ -202,4 +209,33 @@ func TestGitDirtyStatus_OtherEnvFilesMakeDirty(t *testing.T) {
 		t.Errorf("expected custom.env to mark repository as dirty")
 	}
 }
+
+func TestGitDirtyStatus_IgnoresInitScript(t *testing.T) {
+	tempDir := t.TempDir()
+
+	_, err := runCmd(tempDir, "git", "init")
+	if err != nil {
+		t.Skip("git not available in environment, skipping")
+	}
+	runCmd(tempDir, "git", "config", "user.email", "test@example.com")
+	runCmd(tempDir, "git", "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "app.py")
+	os.WriteFile(testFile, []byte("print('hello')"), 0644)
+	runCmd(tempDir, "git", "add", "app.py")
+	runCmd(tempDir, "git", "commit", "-m", "initial commit")
+
+	// Create rexctl_init.sh file
+	initScript := filepath.Join(tempDir, "rexctl_init.sh")
+	os.WriteFile(initScript, []byte("#!/bin/bash\necho init\n"), 0755)
+
+	dirty, err := IsGitDirty(tempDir)
+	if err != nil {
+		t.Fatalf("IsGitDirty failed: %v", err)
+	}
+	if dirty {
+		t.Errorf("expected rexctl_init.sh to be ignored and repo to remain clean")
+	}
+}
+
 
