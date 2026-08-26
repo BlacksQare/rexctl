@@ -122,16 +122,33 @@ spec:
 		t.Fatalf("stack validation failed: %v", err)
 	}
 
-	// 3. Write Standard Override (Sync phase)
+	// 3. Write Standard Override and .env (Sync phase)
+	err = WriteEnvFile(visionDir)
+	if err != nil {
+		t.Fatalf("failed to write .env: %v", err)
+	}
+
 	commit, err := GetGitCommitHash(visionDir)
 	if err != nil || commit == "" {
 		t.Fatalf("failed to get commit hash: %v", err)
 	}
 	dirty, _ := IsGitDirty(visionDir)
+	if dirty {
+		t.Errorf("expected repo with .env to be clean, got dirty=true")
+	}
 
 	err = WriteStandardOverride(visionDir, stackName, "vision_svc", commit, dirty)
 	if err != nil {
 		t.Fatalf("failed to write standard override: %v", err)
+	}
+
+	// Verify .env was written with authorized keys
+	envData, err := os.ReadFile(filepath.Join(visionDir, ".env"))
+	if err != nil {
+		t.Fatalf("failed to read .env: %v", err)
+	}
+	if !strings.Contains(string(envData), "REX_CONTAINER_AUTHORIZED_KEYS=~/.ssh/authorized_keys") {
+		t.Errorf("expected .env to contain authorized keys, got: %s", string(envData))
 	}
 
 	// Verify docker-compose.override.yml was written with correct workspace-specific image name

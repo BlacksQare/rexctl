@@ -99,3 +99,107 @@ func TestGitCommitAndDirtyStatus_RealRepo(t *testing.T) {
 		t.Errorf("expected tag '%s' to have prefix 'rexctl/testws/service:'", tag)
 	}
 }
+
+func TestGitDirtyStatus_IgnoresDotEnvAndOverrides(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Initialize git repo
+	_, err := runCmd(tempDir, "git", "init")
+	if err != nil {
+		t.Skip("git not available in environment, skipping")
+	}
+	runCmd(tempDir, "git", "config", "user.email", "test@example.com")
+	runCmd(tempDir, "git", "config", "user.name", "Test User")
+
+	// Create and commit a file
+	testFile := filepath.Join(tempDir, "app.py")
+	os.WriteFile(testFile, []byte("print('hello')"), 0644)
+	runCmd(tempDir, "git", "add", "app.py")
+	runCmd(tempDir, "git", "commit", "-m", "initial commit")
+
+	commit, err := GetGitCommitHash(tempDir)
+	if err != nil || commit == "" {
+		t.Fatalf("failed to get commit hash: %v", err)
+	}
+
+	// 1. Create .env file
+	if err := WriteEnvFile(tempDir); err != nil {
+		t.Fatalf("failed to write .env: %v", err)
+	}
+
+	// Should still be clean!
+	dirty, err := IsGitDirty(tempDir)
+	if err != nil {
+		t.Fatalf("IsGitDirty failed: %v", err)
+	}
+	if dirty {
+		t.Errorf("expected repo with only .env to be clean, got dirty=true")
+	}
+
+	tag := BuildImageTag("myws", "app", commit, dirty)
+	if tag != "rexctl/myws/app:"+commit {
+		t.Errorf("expected clean image tag 'rexctl/myws/app:%s', got '%s'", commit, tag)
+	}
+
+	// 2. Create docker-compose.override.yml
+	overridePath := filepath.Join(tempDir, "docker-compose.override.yml")
+	os.WriteFile(overridePath, []byte("services:\n  app:\n    image: custom\n"), 0644)
+
+	// Should still be clean!
+	dirty, err = IsGitDirty(tempDir)
+	if err != nil {
+		t.Fatalf("IsGitDirty failed: %v", err)
+	}
+	if dirty {
+		t.Errorf("expected repo with .env and docker-compose.override.yml to be clean, got dirty=true")
+	}
+
+	tag = BuildImageTag("myws", "app", commit, dirty)
+	if tag != "rexctl/myws/app:"+commit {
+		t.Errorf("expected clean image tag 'rexctl/myws/app:%s', got '%s'", commit, tag)
+	}
+
+	// 3. Modifying actual code makes it dirty
+	os.WriteFile(testFile, []byte("print('changed')"), 0644)
+	dirty, err = IsGitDirty(tempDir)
+	if err != nil {
+		t.Fatalf("IsGitDirty failed: %v", err)
+	}
+	if !dirty {
+		t.Errorf("expected repo with modified app.py to be dirty")
+	}
+
+	dirtyTag := BuildImageTag("myws", "app", commit, dirty)
+	if dirtyTag != "rexctl/myws/app:"+commit+"-dirty" {
+		t.Errorf("expected dirty image tag 'rexctl/myws/app:%s-dirty', got '%s'", commit, dirtyTag)
+	}
+}
+
+func TestGitDirtyStatus_OtherEnvFilesMakeDirty(t *testing.T) {
+	tempDir := t.TempDir()
+
+	_, err := runCmd(tempDir, "git", "init")
+	if err != nil {
+		t.Skip("git not available in environment, skipping")
+	}
+	runCmd(tempDir, "git", "config", "user.email", "test@example.com")
+	runCmd(tempDir, "git", "config", "user.name", "Test User")
+
+	testFile := filepath.Join(tempDir, "app.py")
+	os.WriteFile(testFile, []byte("print('hello')"), 0644)
+	runCmd(tempDir, "git", "add", "app.py")
+	runCmd(tempDir, "git", "commit", "-m", "initial commit")
+
+	// Create a non-.env file like custom.env or test.env
+	otherEnv := filepath.Join(tempDir, "custom.env")
+	os.WriteFile(otherEnv, []byte("FOO=BAR\n"), 0644)
+
+	dirty, err := IsGitDirty(tempDir)
+	if err != nil {
+		t.Fatalf("IsGitDirty failed: %v", err)
+	}
+	if !dirty {
+		t.Errorf("expected custom.env to mark repository as dirty")
+	}
+}
+

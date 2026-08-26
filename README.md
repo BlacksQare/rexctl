@@ -126,10 +126,12 @@ If `[workspace]` is omitted on commands that support it, `rexctl` infers the wor
 - `rexctl stop [workspace]`: Pauses containers while preserving container state and internal volumes (`docker compose stop`).
 - `rexctl down [workspace]`: Stops and removes containers and networks (`docker compose down`).
 
-### Compose Overrides
-During `sync`, `build`, and `up`, `rexctl` inspects compose files and generates a `docker-compose.override.yml` in each repository:
+### Environment and Compose Overrides
+During `sync`, `build`, `up`, and `prepare-env`, `rexctl` inspects compose files and generates/updates configuration in each repository:
 - Buildable services are tagged with `rexctl/<workspace>/<service>:<commit>[-dirty]`.
 - Pre-built services retain their image names while attaching metadata labels (`rexctl.workspace`, `rexctl.service`, `rexctl.commit`, `rexctl.dirty`).
+- A `.env` file is generated/updated in each repository containing `REX_CONTAINER_AUTHORIZED_KEYS=~/.ssh/authorized_keys`.
+- Both `docker-compose.override.yml` and `.env` are omitted from Git dirty status and image tag calculation.
 
 ## Development
 

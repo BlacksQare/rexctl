@@ -32,6 +32,10 @@ func CmdBuild(args []string) {
 				Die("Failed to prepare pre-built images for '%s': %v", c.Name, err)
 			}
 
+			if err := WriteEnvFile(contDir); err != nil {
+				logging.LogWarn("Failed to update .env in '%s': %v", c.Name, err)
+			}
+
 			// Refresh standard override with latest commit and dirty state before building
 			rev, _ := GetGitCommitHash(contDir)
 			dirty, _ := IsGitDirty(contDir)

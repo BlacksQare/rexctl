@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"rexctl/config"
+	"strings"
 	"testing"
 )
 
@@ -51,6 +52,16 @@ spec:
 	// Verify marker2 was created in repo2Dir
 	if _, err := os.Stat(filepath.Join(repo2Dir, "marker2.txt")); os.IsNotExist(err) {
 		t.Errorf("expected marker2.txt to be created by repo2 init script")
+	}
+
+	// Verify .env was created in both repos
+	for _, dir := range []string{repo1Dir, repo2Dir} {
+		envData, err := os.ReadFile(filepath.Join(dir, ".env"))
+		if err != nil {
+			t.Errorf("expected .env to exist in %s: %v", dir, err)
+		} else if !strings.Contains(string(envData), "REX_CONTAINER_AUTHORIZED_KEYS=~/.ssh/authorized_keys") {
+			t.Errorf("expected .env in %s to contain REX_CONTAINER_AUTHORIZED_KEYS, got: %s", dir, string(envData))
+		}
 	}
 }
 

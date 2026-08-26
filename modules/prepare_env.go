@@ -21,6 +21,9 @@ func RunPrepareEnv(stackDir string) error {
 			continue
 		}
 		repoDir := filepath.Join(stackDir, c.Name)
+		if err := WriteEnvFile(repoDir); err != nil {
+			logging.LogWarn("Failed to write .env in '%s': %v", c.Name, err)
+		}
 		initScript := filepath.Join(repoDir, config.DefaultInitScriptName)
 
 		if _, err := os.Stat(initScript); err == nil {

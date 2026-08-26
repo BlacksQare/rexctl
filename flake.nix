@@ -35,6 +35,7 @@
               "-X rexctl/config.WorkspacesDir=${cfg.workspacesPath}"
               "-X rexctl/config.DefaultManifestPath=${manifestFile}" 
               "-X rexctl/config.DefaultShellUser=${cfg.defaultShellUser}"
+              "-X rexctl/config.DefaultAuthorizedKeysPath=${cfg.authorizedKeysPath}"
             ];
           });
         in {
@@ -51,6 +52,12 @@
               type = types.str;
               default = "root";
               description = "The default user to use when connecting via rexctl shell / rexctl sh.";
+            };
+
+            authorizedKeysPath = mkOption {
+              type = types.str;
+              default = "~/.ssh/authorized_keys";
+              description = "The default path to authorized_keys injected into container .env files.";
             };
 
             defaultManifest = mkOption {

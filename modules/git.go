@@ -15,7 +15,7 @@ func GetGitCommitHash(repoDir string) (string, error) {
 }
 
 // IsGitDirty returns true if the git working tree has staged, unstaged, or untracked changes
-// (ignoring rexctl-generated files like docker-compose.override.yml).
+// (ignoring rexctl-generated files like docker-compose.override.yml and .env).
 func IsGitDirty(repoDir string) (bool, error) {
 	out, err := runCmd(repoDir, "git", "status", "--porcelain")
 	if err != nil {
@@ -27,16 +27,29 @@ func IsGitDirty(repoDir string) (bool, error) {
 		if trimmed == "" {
 			continue
 		}
-		// Ignore rexctl-generated override files if untracked
-		if strings.HasSuffix(trimmed, "docker-compose.override.yml") ||
-			strings.HasSuffix(trimmed, "compose.override.yaml") ||
-			strings.HasSuffix(trimmed, "docker-compose.override.yaml") {
+		// Ignore rexctl-generated files (override files, .env)
+		if isIgnoredGitFile(trimmed) {
 			continue
 		}
 		return true, nil
 	}
 	return false, nil
 }
+
+// isIgnoredGitFile checks whether a git status line corresponds to an ignored rexctl file (.env or docker compose overrides).
+func isIgnoredGitFile(trimmed string) bool {
+	if strings.HasSuffix(trimmed, "docker-compose.override.yml") ||
+		strings.HasSuffix(trimmed, "compose.override.yaml") ||
+		strings.HasSuffix(trimmed, "docker-compose.override.yaml") ||
+		strings.HasSuffix(trimmed, " .env") ||
+		strings.HasSuffix(trimmed, "/.env") ||
+		strings.HasSuffix(trimmed, "\t.env") ||
+		trimmed == ".env" {
+		return true
+	}
+	return false
+}
+
 
 
 // BuildImageTag creates a standardized image tag including workspace, container name, commit hash, and dirty suffix.

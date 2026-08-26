@@ -112,6 +112,10 @@ func CmdSync(args []string) {
 					logging.LogWarn("Failed to prepare pre-built images for '%s': %v", c.Name, err)
 				}
 
+				if err := WriteEnvFile(contDir); err != nil {
+					logging.LogWarn("Failed to write .env in '%s': %v", c.Name, err)
+				}
+
 				rev, _ := GetGitCommitHash(contDir)
 				dirty, _ := IsGitDirty(contDir)
 				if err := WriteStandardOverride(contDir, stackName, c.Name, rev, dirty); err != nil {
