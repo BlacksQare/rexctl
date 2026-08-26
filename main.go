@@ -61,7 +61,9 @@ func Run(args []string) {
 		modules.CmdEdit(cmdArgs)
 	case "info":
 		modules.CmdInfo(cmdArgs)
-	case "help":
+	case "version", "-v", "--version":
+		modules.CmdVersion()
+	case "help", "-h", "--help":
 		modules.CmdHelp()
 	default:
 		modules.CmdHelp()

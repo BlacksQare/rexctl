@@ -17,6 +17,10 @@
             
             vendorHash = "sha256-AG7fBxxJVIl2UO9cKxWa63iGMKnRk5CXl3nsC56CppY=";
 
+            ldflags = [
+              "-X rexctl/config.CommitHash=${self.shortRev or self.dirtyShortRev or "dev"}"
+            ];
+
             nativeCheckInputs = [ pkgs.git ];
           };
         });
@@ -31,11 +35,12 @@
           manifestFile = pkgs.writeText "default-rex.yaml" cfg.defaultManifest;
           
           customPkg = basePkg.overrideAttrs (oldAttrs: {
-            ldflags = [ 
+            ldflags = (oldAttrs.ldflags or []) ++ [ 
               "-X rexctl/config.WorkspacesDir=${cfg.workspacesPath}"
               "-X rexctl/config.DefaultManifestPath=${manifestFile}" 
               "-X rexctl/config.DefaultShellUser=${cfg.defaultShellUser}"
               "-X rexctl/config.DefaultAuthorizedKeysPath=${cfg.authorizedKeysPath}"
+              "-X rexctl/config.CommitHash=${self.shortRev or self.dirtyShortRev or "dev"}"
             ];
           });
         in {

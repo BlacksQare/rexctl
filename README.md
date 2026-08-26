@@ -112,6 +112,7 @@ spec:
 | `list` | `rexctl list` | List all available workspaces |
 | `pwd` | `rexctl pwd [workspace]` | Print the filesystem path of a workspace |
 | `validate` | `rexctl validate [workspace]` | Validate `rex.yaml` syntax and structure |
+| `version` | `rexctl version` | Print the build commit hash |
 
 If `[workspace]` is omitted on commands that support it, `rexctl` infers the workspace from the current working directory (if inside a workspace) or the currently active stack.
 

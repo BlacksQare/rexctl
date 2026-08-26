@@ -87,6 +87,7 @@ func TestRun_CommandDispatching(t *testing.T) {
 		{"status", []string{"status", "nonexistent-ws"}},
 		{"pwd", []string{"pwd"}},
 		{"get", []string{"get"}},
+		{"version", []string{"version"}},
 	}
 
 	for _, tc := range commands {

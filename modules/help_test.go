@@ -27,6 +27,7 @@ func TestCmdHelp_ContainsAllCommands(t *testing.T) {
 		"info",
 		"status",
 		"validate",
+		"version",
 		"help",
 	}
 

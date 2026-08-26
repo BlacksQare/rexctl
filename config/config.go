@@ -23,4 +23,5 @@ var DefaultInitScriptName = "rexctl_init.sh"
 var DefaultShellUser = "root"
 var DefaultAuthorizedKeysPath = "~/.ssh/authorized_keys"
 var DefaultEnvVarAuthorizedKeys = "REX_CONTAINER_AUTHORIZED_KEYS"
+var CommitHash = "dev"
 

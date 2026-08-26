@@ -25,6 +25,7 @@ Commands:
   info         [workspace]           Display detailed information about a workspace
   status                             Show status of running containers
   validate                           Validate the workspace manifest
+  version                            Print the build commit hash
   help                               Display this help message
 
 
